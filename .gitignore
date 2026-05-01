@@ -1,5 +1,12 @@
 # Local only
 AGENT_PROMPT.md
+DEMO_SCRIPT.md
+DEPLOYMENT.md
+IBM_BOB_USAGE.md
+RULES_GUIDE.md
+SUBMISSION_CHECKLIST.md
+WINNING_STRATEGY.md
+.bob/
 
 # Backend
 backend/.env
