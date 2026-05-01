@@ -7,7 +7,7 @@ from routes import sessions, coaching
 # Create FastAPI app
 app = FastAPI(
     title="Hai-Physio API",
-    description="AI-powered physiotherapy coaching for low-resource settings",
+    description="AI-powered physiotherapy service for low-resource settings",
     version="1.0.0"
 )
 
