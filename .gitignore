@@ -1,0 +1,17 @@
+# Local only
+AGENT_PROMPT.md
+
+# Backend
+backend/.env
+backend/__pycache__/
+backend/**/__pycache__/
+*.pyc
+*.db
+
+# Frontend
+frontend/node_modules/
+frontend/.next/
+frontend/.env.local
+
+# OS
+.DS_Store
