@@ -1,0 +1,52 @@
+{
+  "name": "Hai-Physio - AI Physiotherapy",
+  "short_name": "Hai-Physio",
+  "description": "Offline-first, voice-guided rehabilitation companion for low-resource settings",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#2563eb",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "/icon-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icon-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["health", "medical", "lifestyle"],
+  "screenshots": [],
+  "shortcuts": [
+    {
+      "name": "Patient View",
+      "short_name": "Patient",
+      "description": "Access patient exercise screen",
+      "url": "/patient",
+      "icons": [
+        {
+          "src": "/icon-192x192.png",
+          "sizes": "192x192"
+        }
+      ]
+    },
+    {
+      "name": "Clinician Dashboard",
+      "short_name": "Clinician",
+      "description": "Access clinician monitoring dashboard",
+      "url": "/clinician",
+      "icons": [
+        {
+          "src": "/icon-192x192.png",
+          "sizes": "192x192"
+        }
+      ]
+    }
+  ]
+}
