@@ -19,22 +19,11 @@ export default function ExerciseCard({ exercise }: ExerciseCardProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
   const [error, setError] = useState<string>('');
-  const [audio, setAudio] = useState<HTMLAudioElement | null>(null);
 
   // Fetch coaching instruction on mount
   useEffect(() => {
     fetchCoachingInstruction();
   }, [exercise.name]);
-
-  // Cleanup audio on unmount
-  useEffect(() => {
-    return () => {
-      if (audio) {
-        audio.pause();
-        audio.src = '';
-      }
-    };
-  }, [audio]);
 
   const fetchCoachingInstruction = async () => {
     setIsLoading(true);
@@ -66,9 +55,15 @@ export default function ExerciseCard({ exercise }: ExerciseCardProps) {
     }
   };
 
-  const playVoiceInstruction = async () => {
+  const playVoiceInstruction = () => {
     if (!instruction) {
       setError('No instruction available to play');
+      return;
+    }
+
+    // Check if browser supports speech synthesis
+    if (!('speechSynthesis' in window)) {
+      setError('Your browser does not support text-to-speech. Please read the instructions below.');
       return;
     }
 
@@ -76,47 +71,43 @@ export default function ExerciseCard({ exercise }: ExerciseCardProps) {
     setError('');
 
     try {
-      // Stop any currently playing audio
-      if (audio) {
-        audio.pause();
-        audio.src = '';
+      // Cancel any ongoing speech
+      window.speechSynthesis.cancel();
+
+      // Create speech utterance
+      const utterance = new SpeechSynthesisUtterance(instruction);
+      
+      // Configure voice settings
+      utterance.rate = 0.9; // Slightly slower for clarity
+      utterance.pitch = 1.0;
+      utterance.volume = 1.0;
+      utterance.lang = 'en-US';
+
+      // Try to use a female voice if available (more friendly)
+      const voices = window.speechSynthesis.getVoices();
+      const femaleVoice = voices.find(voice => 
+        voice.name.includes('Female') || 
+        voice.name.includes('Samantha') ||
+        voice.name.includes('Victoria')
+      );
+      if (femaleVoice) {
+        utterance.voice = femaleVoice;
       }
 
-      const response = await fetch(`${API_BASE_URL}/coaching/tts`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          text: instruction,
-        }),
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to generate speech');
-      }
-
-      const data = await response.json();
-      
-      // Create audio element from base64
-      const audioBlob = base64ToBlob(data.audio, 'audio/mp3');
-      const audioUrl = URL.createObjectURL(audioBlob);
-      
-      const newAudio = new Audio(audioUrl);
-      setAudio(newAudio);
-
-      newAudio.onended = () => {
+      // Handle speech end
+      utterance.onend = () => {
         setIsPlaying(false);
-        URL.revokeObjectURL(audioUrl);
       };
 
-      newAudio.onerror = () => {
+      // Handle speech error
+      utterance.onerror = (event) => {
+        console.error('Speech synthesis error:', event);
         setIsPlaying(false);
-        setError('Failed to play audio');
-        URL.revokeObjectURL(audioUrl);
+        setError('Failed to play voice instructions. Please read the text below.');
       };
 
-      await newAudio.play();
+      // Start speaking
+      window.speechSynthesis.speak(utterance);
     } catch (err) {
       console.error('Error playing voice instruction:', err);
       setError('Could not play voice instruction. Please read the text below.');
@@ -125,11 +116,10 @@ export default function ExerciseCard({ exercise }: ExerciseCardProps) {
   };
 
   const stopVoiceInstruction = () => {
-    if (audio) {
-      audio.pause();
-      audio.currentTime = 0;
-      setIsPlaying(false);
+    if ('speechSynthesis' in window) {
+      window.speechSynthesis.cancel();
     }
+    setIsPlaying(false);
   };
 
   return (
@@ -193,20 +183,14 @@ export default function ExerciseCard({ exercise }: ExerciseCardProps) {
             <p className="text-yellow-800 text-sm">{error}</p>
           </div>
         )}
+
+        {/* Browser TTS Notice */}
+        <div className="p-2 bg-blue-50 border border-blue-200 rounded-lg">
+          <p className="text-blue-700 text-xs">
+            💡 Using browser's built-in text-to-speech (works offline!)
+          </p>
+        </div>
       </div>
     </div>
   );
-}
-
-// Helper function to convert base64 to Blob
-function base64ToBlob(base64: string, mimeType: string): Blob {
-  const byteCharacters = atob(base64);
-  const byteNumbers = new Array(byteCharacters.length);
-  
-  for (let i = 0; i < byteCharacters.length; i++) {
-    byteNumbers[i] = byteCharacters.charCodeAt(i);
-  }
-  
-  const byteArray = new Uint8Array(byteNumbers);
-  return new Blob([byteArray], { type: mimeType });
 }
