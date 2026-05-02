@@ -4,50 +4,55 @@ from dotenv import load_dotenv
 
 from models.session import CoachingRequest
 
-# Load environment variables
 load_dotenv()
 
 router = APIRouter(prefix="/coaching", tags=["coaching"])
 
+FALLBACK_INSTRUCTIONS = {
+    "knee bend": "Start sitting on a chair with feet flat on the floor. Slowly bend your knee, lifting your foot off the ground. Hold for 3 seconds, then lower it back down. Keep your back straight. Breathe in as you lift, breathe out as you lower. Do this 10 times on each leg. Stop if you feel sharp pain.",
+    "shoulder rotation": "Stand or sit upright. Slowly roll your shoulders forward in a circle, then backward. Keep your arms relaxed at your sides. Breathe steadily throughout. Do 10 rotations forward and 10 backward. Move slowly and gently. Stop if you feel any pain.",
+    "ankle circles": "Sit on a chair and lift one foot off the floor. Slowly rotate your ankle in a circle, 10 times clockwise then 10 times anticlockwise. Keep the movement smooth. Breathe normally. Repeat with the other foot. Stop if you feel pain.",
+}
+
+def get_fallback(exercise_name: str) -> str:
+    key = exercise_name.lower().strip()
+    for k, v in FALLBACK_INSTRUCTIONS.items():
+        if k in key or key in k:
+            return v
+    return (
+        f"For {exercise_name}: start in a comfortable position. "
+        "Move slowly and gently through the exercise. "
+        "Breathe steadily — inhale to prepare, exhale as you move. "
+        "Complete 10 repetitions. Rest if you feel pain or discomfort."
+    )
+
 
 @router.post("/instruction")
 async def get_coaching_instruction(request: CoachingRequest):
-    """
-    Generate AI coaching instruction for an exercise using IBM watsonx.ai
-    """
+    """Generate AI coaching instruction, with fallback if watsonx.ai is unavailable."""
     try:
-        # Import IBM watsonx.ai SDK
         from ibm_watsonx_ai.foundation_models import Model
         from ibm_watsonx_ai.metanames import GenTextParamsMetaNames as GenParams
-        
-        # Get credentials from environment
+
         api_key = os.getenv("WATSONX_API_KEY")
         project_id = os.getenv("WATSONX_PROJECT_ID")
         url = os.getenv("WATSONX_URL", "https://us-south.ml.cloud.ibm.com")
-        
+
         if not api_key or not project_id:
-            raise HTTPException(
-                status_code=500,
-                detail="IBM watsonx.ai credentials not configured. Please set WATSONX_API_KEY and WATSONX_PROJECT_ID in .env file"
-            )
-        
-        # Initialize the model
+            raise ValueError("Credentials not configured")
+
         model = Model(
-            model_id="ibm/granite-13b-chat-v2",
+            model_id="ibm/granite-3-8b-instruct",
             params={
                 GenParams.MAX_NEW_TOKENS: 200,
                 GenParams.TEMPERATURE: 0.7,
                 GenParams.TOP_P: 1,
                 GenParams.TOP_K: 50
             },
-            credentials={
-                "apikey": api_key,
-                "url": url
-            },
+            credentials={"apikey": api_key, "url": url},
             project_id=project_id
         )
-        
-        # Create prompt for exercise coaching
+
         prompt = f"""You are a physiotherapist providing voice instructions to a patient doing home exercises.
 
 Exercise: {request.exercise_name}
@@ -59,32 +64,22 @@ Provide clear, simple, step-by-step instructions for this exercise. Keep it unde
 4. Safety tips
 
 Instructions:"""
-        
-        # Generate response
+
         response = model.generate_text(prompt=prompt)
-        
+        return {"exercise_name": request.exercise_name, "instruction": response.strip(), "source": "watsonx"}
+
+    except Exception:
         return {
             "exercise_name": request.exercise_name,
-            "instruction": response.strip()
+            "instruction": get_fallback(request.exercise_name),
+            "source": "fallback"
         }
-        
-    except ImportError:
-        raise HTTPException(
-            status_code=500,
-            detail="IBM watsonx.ai SDK not installed. Run: pip install ibm-watsonx-ai"
-        )
-    except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Failed to generate coaching instruction: {str(e)}"
-        )
 
 
 @router.get("/health")
 async def health_check():
     """Check if IBM watsonx.ai service is configured"""
     watsonx_configured = bool(os.getenv("WATSONX_API_KEY") and os.getenv("WATSONX_PROJECT_ID"))
-    
     return {
         "watsonx_ai": "configured" if watsonx_configured else "not_configured",
         "text_to_speech": "browser_native",

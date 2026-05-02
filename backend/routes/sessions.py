@@ -4,8 +4,12 @@ from datetime import datetime
 import os
 from sqlalchemy import create_engine, Column, Integer, String, Boolean, DateTime
 from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker, Session
+from sqlalchemy.orm import sessionmaker
 from contextlib import contextmanager
+from dotenv import load_dotenv
+
+# Load environment variables FIRST
+load_dotenv()
 
 from models.session import Session as SessionModel, SessionCreate
 
