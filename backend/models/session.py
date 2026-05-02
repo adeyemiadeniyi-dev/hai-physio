@@ -20,11 +20,6 @@ class CoachingRequest(BaseModel):
     exercise_name: str
 
 
-class TTSRequest(BaseModel):
-    """Request model for text-to-speech"""
-    text: str
-
-
 class SessionCreate(BaseModel):
     """Model for creating a new session"""
     patient_id: str
