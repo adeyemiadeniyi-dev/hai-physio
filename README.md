@@ -17,9 +17,9 @@ Hai-Physio enables patients to perform physiotherapy at home with AI guidance, w
 - **Frontend**: Next.js 14 (App Router) + Tailwind CSS - deployed as PWA
 - **Backend**: FastAPI (Python)
 - **AI Coaching**: IBM watsonx.ai (LLM for exercise instructions)
-- **Voice**: IBM Watson Text-to-Speech
+- **Voice**: Browser Web Speech API (`window.speechSynthesis`) — works offline
 - **Offline Storage**: IndexedDB (sessions saved locally, synced when online)
-- **Database**: SQLite (dev) / PostgreSQL (production)
+- **Database**: PostgreSQL (already created: `hai_physio`)
 
 ## 🚀 Quick Start
 
@@ -27,7 +27,7 @@ Hai-Physio enables patients to perform physiotherapy at home with AI guidance, w
 
 - Node.js 18+ and npm
 - Python 3.9+
-- IBM Cloud account with watsonx.ai and Watson Text-to-Speech credentials
+- IBM Cloud account with watsonx.ai credentials
 
 ### Backend Setup
 
@@ -59,7 +59,7 @@ Frontend available at `http://localhost:3000`
 
 ## 🎯 Key Features
 
-- ✓ Voice-first AI coaching (watsonx.ai + Watson TTS)
+- ✓ Voice-first AI coaching (watsonx.ai + browser speechSynthesis)
 - ✓ Offline-first with automatic sync
 - ✓ Emoji-based pain scale for low literacy
 - ✓ Real-time clinician monitoring
@@ -71,19 +71,18 @@ Frontend available at `http://localhost:3000`
 - `GET /sessions/{patient_id}` - Get patient sessions
 - `PATCH /sessions/{id}/flag` - Flag session
 - `POST /coaching/instruction` - AI coaching
-- `POST /coaching/tts` - Text-to-speech
 
 ## 🔧 IBM Cloud Setup
 
 1. Get watsonx.ai API key and Project ID
-2. Get Watson TTS API key and URL
-3. Add to backend `.env` file
+2. Add to backend `.env` file
 
 ## 📝 Notes
 
 - Hardcoded patient "Maria" (p1) for MVP demo
 - No authentication (simplified for hackathon)
-- SQLite for dev, PostgreSQL for production
+- PostgreSQL database `hai_physio` already created
+- Voice uses browser's `window.speechSynthesis` (offline-capable); IBM TTS may be added later
 
 ---
 
