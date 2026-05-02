@@ -1,117 +1,109 @@
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException
 from typing import List
 from datetime import datetime
-import sqlite3
-from contextlib import contextmanager
 import os
+from sqlalchemy import create_engine, Column, Integer, String, Boolean, DateTime
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import sessionmaker, Session
+from contextlib import contextmanager
 
-from models.session import Session, SessionCreate
+from models.session import Session as SessionModel, SessionCreate
 
 router = APIRouter(prefix="/sessions", tags=["sessions"])
 
-# Database path
-DB_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), "sessions.db")
+# Database setup - PostgreSQL
+DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://postgres:postgres@localhost:5432/hai_physio")
+
+engine = create_engine(DATABASE_URL)
+SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+Base = declarative_base()
+
+
+# SQLAlchemy model
+class SessionDB(Base):
+    __tablename__ = "sessions"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    patient_id = Column(String, index=True, nullable=False)
+    exercise_name = Column(String, nullable=False)
+    reps = Column(Integer, nullable=False)
+    pain_score = Column(Integer, nullable=False)
+    timestamp = Column(DateTime, nullable=False)
+    synced = Column(Boolean, default=True)
+    flagged = Column(Boolean, default=False)
+
+
+# Create tables
+Base.metadata.create_all(bind=engine)
 
 
 @contextmanager
 def get_db():
-    """Context manager for database connection"""
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
+    """Context manager for database session"""
+    db = SessionLocal()
     try:
-        yield conn
+        yield db
     finally:
-        conn.close()
+        db.close()
 
 
-def init_db():
-    """Initialize the database with sessions table"""
-    with get_db() as conn:
-        conn.execute("""
-            CREATE TABLE IF NOT EXISTS sessions (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                patient_id TEXT NOT NULL,
-                exercise_name TEXT NOT NULL,
-                reps INTEGER NOT NULL,
-                pain_score INTEGER NOT NULL,
-                timestamp TEXT NOT NULL,
-                synced BOOLEAN DEFAULT 1,
-                flagged BOOLEAN DEFAULT 0
-            )
-        """)
-        conn.commit()
-
-
-# Initialize database on module load
-init_db()
-
-
-@router.post("", response_model=Session, status_code=201)
+@router.post("", response_model=SessionModel, status_code=201)
 async def create_session(session: SessionCreate):
     """Create a new physiotherapy session"""
     try:
         timestamp = session.timestamp or datetime.utcnow()
         
-        with get_db() as conn:
-            cursor = conn.execute(
-                """
-                INSERT INTO sessions (patient_id, exercise_name, reps, pain_score, timestamp, synced)
-                VALUES (?, ?, ?, ?, ?, ?)
-                """,
-                (
-                    session.patient_id,
-                    session.exercise_name,
-                    session.reps,
-                    session.pain_score,
-                    timestamp.isoformat(),
-                    session.synced if session.synced is not None else True
-                )
+        with get_db() as db:
+            db_session = SessionDB(
+                patient_id=session.patient_id,
+                exercise_name=session.exercise_name,
+                reps=session.reps,
+                pain_score=session.pain_score,
+                timestamp=timestamp,
+                synced=session.synced if session.synced is not None else True,
+                flagged=False
             )
-            conn.commit()
-            session_id = cursor.lastrowid
             
-            # Fetch the created session
-            row = conn.execute("SELECT * FROM sessions WHERE id = ?", (session_id,)).fetchone()
+            db.add(db_session)
+            db.commit()
+            db.refresh(db_session)
             
-            return Session(
-                id=row["id"],
-                patient_id=row["patient_id"],
-                exercise_name=row["exercise_name"],
-                reps=row["reps"],
-                pain_score=row["pain_score"],
-                timestamp=datetime.fromisoformat(row["timestamp"]),
-                synced=bool(row["synced"]),
-                flagged=bool(row["flagged"])
+            return SessionModel(
+                id=db_session.id,
+                patient_id=db_session.patient_id,
+                exercise_name=db_session.exercise_name,
+                reps=db_session.reps,
+                pain_score=db_session.pain_score,
+                timestamp=db_session.timestamp,
+                synced=db_session.synced,
+                flagged=db_session.flagged
             )
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to create session: {str(e)}")
 
 
-@router.get("/{patient_id}", response_model=List[Session])
+@router.get("/{patient_id}", response_model=List[SessionModel])
 async def get_patient_sessions(patient_id: str):
     """Get all sessions for a specific patient"""
     try:
-        with get_db() as conn:
-            rows = conn.execute(
-                "SELECT * FROM sessions WHERE patient_id = ? ORDER BY timestamp DESC",
-                (patient_id,)
-            ).fetchall()
+        with get_db() as db:
+            sessions = db.query(SessionDB).filter(
+                SessionDB.patient_id == patient_id
+            ).order_by(SessionDB.timestamp.desc()).all()
             
-            sessions = [
-                Session(
-                    id=row["id"],
-                    patient_id=row["patient_id"],
-                    exercise_name=row["exercise_name"],
-                    reps=row["reps"],
-                    pain_score=row["pain_score"],
-                    timestamp=datetime.fromisoformat(row["timestamp"]),
-                    synced=bool(row["synced"]),
-                    flagged=bool(row["flagged"])
+            return [
+                SessionModel(
+                    id=s.id,
+                    patient_id=s.patient_id,
+                    exercise_name=s.exercise_name,
+                    reps=s.reps,
+                    pain_score=s.pain_score,
+                    timestamp=s.timestamp,
+                    synced=s.synced,
+                    flagged=s.flagged
                 )
-                for row in rows
+                for s in sessions
             ]
-            
-            return sessions
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to fetch sessions: {str(e)}")
 
@@ -120,15 +112,14 @@ async def get_patient_sessions(patient_id: str):
 async def flag_session(session_id: int, flagged: bool = True):
     """Flag or unflag a session for clinician attention"""
     try:
-        with get_db() as conn:
-            cursor = conn.execute(
-                "UPDATE sessions SET flagged = ? WHERE id = ?",
-                (flagged, session_id)
-            )
-            conn.commit()
+        with get_db() as db:
+            session = db.query(SessionDB).filter(SessionDB.id == session_id).first()
             
-            if cursor.rowcount == 0:
+            if not session:
                 raise HTTPException(status_code=404, detail="Session not found")
+            
+            session.flagged = flagged
+            db.commit()
             
             return {"success": True, "session_id": session_id, "flagged": flagged}
     except HTTPException:
