@@ -1,16 +1,15 @@
-from pydantic import BaseModel
-from datetime import datetime
+from pydantic import BaseModel, Field
+from datetime import datetime, timezone
 from typing import Optional
 
 
 class Session(BaseModel):
-    """Model for a physiotherapy session"""
     id: Optional[int] = None
     patient_id: str
     exercise_name: str
     reps: int
-    pain_score: int  # 1-5 scale
-    timestamp: datetime = datetime.utcnow()
+    pain_score: int
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     synced: bool = True
     flagged: bool = False
 
